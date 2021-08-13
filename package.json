@@ -1,0 +1,29 @@
+{
+  "name": "cdk-screenshot",
+  "version": "0.1.0",
+  "bin": {
+    "cdk-screenshot": "bin/cdk-screenshot.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "test": "jest",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@aws-cdk/assert": "1.118.0",
+    "@types/jest": "^27.0.0",
+    "@types/node": "16.6.0",
+    "aws-cdk": "1.118.0",
+    "jest": "^27.0.6",
+    "ts-jest": "^27.0.4",
+    "ts-node": "^10.2.0",
+    "typescript": "~4.3.5"
+  },
+  "dependencies": {
+    "@aws-cdk/aws-lambda-python": "^1.118.0",
+    "@aws-cdk/aws-s3": "^1.118.0",
+    "@aws-cdk/core": "1.118.0",
+    "source-map-support": "^0.5.19"
+  }
+}
