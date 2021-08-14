@@ -48,15 +48,13 @@ def handler(event, context):
     endts = time.time()
 
     timediff = endts - startts
-    tracer.put_annotation("getduration", str(timediff)) 
-    tracer.put_annotation("geturl", str(url)) 
 
     s3_client.upload_file(tmpfile, bucketname, fname)
     b64img = get_base64_encoded_image(tmpfile)
     
     response = {
         "statusCode": 200,
-        "body": '<html><body>' + url + ' - ' + str(round(timediff, 2)) + ' seconds <br /><img src="data:image/png;base64,' + b64img + '" /></body></html>',
+        "body": '<html><body>' + url + ' - took ' + str(round(timediff, 2)) + ' seconds <br /><img width = "95%" height = "95%" src = "data:image/png;base64,' + b64img + '" /></body></html>',
         "headers": {
             'Content-Type': 'text/html',
         }
