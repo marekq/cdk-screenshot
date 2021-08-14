@@ -37,6 +37,7 @@ def handler(event, context):
     options.add_argument('--single-process')
     options.add_argument('--disable-dev-shm-usage')
 
+    startts = time.time()
     driver = webdriver.Chrome('/usr/lib/chromium-browser/chromedriver', chrome_options = options)
     driver.get(url)
     driver.save_screenshot(tmpfile)
@@ -44,23 +45,18 @@ def handler(event, context):
     driver.close()
     driver.quit()
 
+    endts = time.time()
+
+    timediff = endts - startts
+    tracer.put_annotation("getduration", str(timediff)) 
+    tracer.put_annotation("geturl", str(url)) 
+
     s3_client.upload_file(tmpfile, bucketname, fname)
-
-    '''
-    s3url = s3_client.generate_presigned_url('get_object',
-        Params = {
-            'Bucket': bucketname,
-            'Key': fname
-        },
-        ExpiresIn = 3600
-    )
-    '''
-
     b64img = get_base64_encoded_image(tmpfile)
     
     response = {
         "statusCode": 200,
-        "body": '<html><body>' + url + '<img src="data:image/png;base64,' + b64img + '" /></body></html>',
+        "body": '<html><body>' + url + ' - ' + str(round(timediff, 2)) + ' seconds <br /><img src="data:image/png;base64,' + b64img + '" /></body></html>',
         "headers": {
             'Content-Type': 'text/html',
         }

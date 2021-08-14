@@ -21,10 +21,9 @@ export class CdkScreenshotStack extends cdk.Stack {
     const lambda = new DockerImageFunction(this, "screenshot", {
       code: DockerImageCode.fromImageAsset(dockerfile),
       memorySize: 2048,
-      timeout: Duration.seconds(30),
+      timeout: Duration.seconds(15),
       tracing: Tracing.ACTIVE,
-      profiling: true,
-      reservedConcurrentExecutions: 1,
+      reservedConcurrentExecutions: 3,
       environment: {
         "s3bucket": s3bucket.bucketName
       }
