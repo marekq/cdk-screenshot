@@ -25,7 +25,8 @@ export class CdkScreenshotStack extends cdk.Stack {
       tracing: Tracing.ACTIVE,
       reservedConcurrentExecutions: 3,
       environment: {
-        "s3bucket": s3bucket.bucketName
+        "s3bucket": s3bucket.bucketName,
+        "AWS_CODEGURU_PROFILER_GROUP_NAME": "screenshot"
       }
     });
 

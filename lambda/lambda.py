@@ -1,4 +1,5 @@
-import base64, boto3, os, time
+import base64, boto3, os, socket, time
+from codeguru_profiler_agent import with_lambda_profiler
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from aws_lambda_powertools import Logger, Tracer
@@ -22,10 +23,24 @@ def get_base64_encoded_image(image_path):
 # lambda handler
 @logger.inject_lambda_context(log_event = True)
 @tracer.capture_lambda_handler
+@with_lambda_profiler(profiling_group_name = "screenshot")
 def handler(event, context):
 
     # get url from API input
-    rawurl = event['rawPath'][1:]
+    if len(event['rawPath']) > 0:
+        rawurl = event['rawPath'][1:]
+
+        try: 
+            x = socket.gethostbyname(rawurl)
+            print('ip ' + str(x))
+
+        except:
+            print('invalid dns')
+            rawurl = 'github.com'
+
+    else:
+        rawurl = 'github.com'
+
     url = 'https://' + rawurl
     print(url)
 
@@ -49,8 +64,10 @@ def handler(event, context):
     # get url and save screenshot
     driver = webdriver.Chrome('/usr/lib/chromium-browser/chromedriver', chrome_options = options)
 
+    # get body of website
     driver.get(url)
-    driver.save_screenshot(tmpfile)
+    body = driver.find_element_by_tag_name('body')
+    body.screenshot(tmpfile)
 
     driver.close()
     driver.quit()
@@ -66,9 +83,9 @@ def handler(event, context):
     # return HTML response
     response = {
         "statusCode": 200,
-        "body": '<html><body>' + url + ' - took ' + str(round(timediff, 2)) + ' seconds <br /><img width = "95%" height = "95%" src = "data:image/png;base64,' + b64img + '" /></body></html>',
+        "body": '<html><body><center>' + url + ' - took ' + str(round(timediff, 2)) + ' seconds <br /><img height = "100%" src = "data:image/png;base64,' + b64img + '" /></center></body></html>',
         "headers": {
-            'Content-Type': 'text/html',
+            'Content-Type': 'text/html'
         }
     } 
     
