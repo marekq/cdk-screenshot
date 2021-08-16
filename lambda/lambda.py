@@ -32,17 +32,35 @@ def handler(event, context):
         domain = rawurl.split('/')[0]
 
         try: 
+            
             x = socket.gethostbyname(domain)
             print('ip ' + str(x) + ' for ' + rawurl)
 
         except:
+
             print('invalid dns ' + rawurl + ', setting github.com')
-            rawurl = 'github.com'
+            
+            response = {
+                "statusCode": 200,
+                "body": '<html><body>invalid URL ' + rawurl + ' submitted</body></html>',
+                "headers": {
+                    'Content-Type': 'text/html'
+                }
+            } 
+
+            return response
 
     else:
 
-        print('no url set, using github.com')
-        rawurl = 'github.com'
+        response = {
+            "statusCode": 200,
+            "body": '<html><body>no URL submitted</body></html>',
+            "headers": {
+                'Content-Type': 'text/html'
+            }
+        } 
+
+        return response
 
     url = 'https://' + rawurl
     print('getting ' + url)
