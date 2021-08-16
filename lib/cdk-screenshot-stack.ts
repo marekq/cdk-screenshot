@@ -1,32 +1,48 @@
 import * as cdk from '@aws-cdk/core';
 import * as path from "path";
+import { ComputePlatform, ProfilingGroup } from "@aws-cdk/aws-codeguruprofiler";
 import { DockerImageFunction, DockerImageCode } from "@aws-cdk/aws-lambda";
 import { Tracing } from '@aws-cdk/aws-lambda';
 import { CfnOutput, Duration } from '@aws-cdk/core';
 import { Bucket } from '@aws-cdk/aws-s3';
 import { HttpApi } from '@aws-cdk/aws-apigatewayv2';
 import { LambdaProxyIntegration } from '@aws-cdk/aws-apigatewayv2-integrations';
+import { AccountRootPrincipal, ServicePrincipal, Role, ManagedPolicy } from '@aws-cdk/aws-iam';
 
 export class CdkScreenshotStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
     // create S3 bucket
-    const s3bucket = new Bucket(this, 'screenshotbucket');
+    const s3bucket = new Bucket(this, 'screenshotBucket');
 
     // define Docker file for Lambda function
     const dockerfile = path.join(__dirname, "./../lambda");
-    
+
+    const lambdaRole = new Role(this, 'lambdaRole', {
+      assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies: [
+        ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
+        ManagedPolicy.fromAwsManagedPolicyName('AmazonCodeGuruProfilerAgentAccess')
+      ]
+    });
+
+    const pgroup = new ProfilingGroup(this, 'screenshotProfiling', {
+      computePlatform: ComputePlatform.AWS_LAMBDA
+    });
+
     // define Lambda function using Docker image
-    const lambda = new DockerImageFunction(this, "screenshot", {
+    const lambda = new DockerImageFunction(this, "screenshotLambda", {
       code: DockerImageCode.fromImageAsset(dockerfile),
       memorySize: 2048,
       timeout: Duration.seconds(15),
       tracing: Tracing.ACTIVE,
       reservedConcurrentExecutions: 3,
+      role: lambdaRole,
       environment: {
         "s3bucket": s3bucket.bucketName,
-        "AWS_CODEGURU_PROFILER_GROUP_NAME": "screenshot"
+        "AWS_CODEGURU_PROFILER_GROUP_NAME": pgroup.profilingGroupName
       }
     });
 

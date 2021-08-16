@@ -23,26 +23,29 @@ def get_base64_encoded_image(image_path):
 # lambda handler
 @logger.inject_lambda_context(log_event = True)
 @tracer.capture_lambda_handler
-@with_lambda_profiler(profiling_group_name = "screenshot")
+@with_lambda_profiler(profiling_group_name = os.environ['AWS_CODEGURU_PROFILER_GROUP_NAME'])
 def handler(event, context):
 
     # get url from API input
     if len(event['rawPath']) > 0:
         rawurl = event['rawPath'][1:]
+        domain = rawurl.split('/')[0]
 
         try: 
-            x = socket.gethostbyname(rawurl)
-            print('ip ' + str(x))
+            x = socket.gethostbyname(domain)
+            print('ip ' + str(x) + ' for ' + rawurl)
 
         except:
-            print('invalid dns')
+            print('invalid dns ' + rawurl + ', setting github.com')
             rawurl = 'github.com'
 
     else:
+
+        print('no url set, using github.com')
         rawurl = 'github.com'
 
     url = 'https://' + rawurl
-    print(url)
+    print('getting ' + url)
 
     # set tmp and file paths
     fname = rawurl.replace('.', '_').replace('/','-') + '-screen.png'
