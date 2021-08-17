@@ -22,14 +22,28 @@ headers = {
 }
 
 # convert image to base64
+@tracer.capture_method(capture_response = False)
 def get_base64_encoded_image(image_path):
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode('utf-8')
 
+
+# compress png image using pngquant
+@tracer.capture_method(capture_response = False)
+def compress_png(tmpfile):
+
+    process = subprocess.Popen('pngquant ' + tmpfile + ' -o ' + tmpfile + ' -f --skip-if-larger -v --speed 1', stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell = True, cwd = '/tmp', text = True)
+
+    stdout, stderr = process.communicate()
+    print(stdout)
+    print(stderr)
+
+    #exit_code = process.wait()
+
 # lambda handler
-@logger.inject_lambda_context(log_event = True)
-@tracer.capture_lambda_handler
-@with_lambda_profiler(profiling_group_name = os.environ['AWS_CODEGURU_PROFILER_GROUP_NAME'])
+@tracer.capture_lambda_handler(capture_response = False)
+@logger.inject_lambda_context(log_event = False)
+#@with_lambda_profiler(profiling_group_name = os.environ['AWS_CODEGURU_PROFILER_GROUP_NAME'])
 def handler(event, context):
     
     # set empty html response
@@ -78,7 +92,7 @@ def handler(event, context):
         print('getting ' + url)
 
         # set tmp and file paths
-        fname = 'screenshots/' + domain + '/' + str(startts) + '-' + rawurl.replace('.', '_').replace('/','-') + '.png'
+        fname = 'screenshots/' + domain + '/' + str(int(startts)) + '-' + rawurl.replace('.', '_').replace('/','-') + '.png'
         tmpfile = '/tmp/screen.png'
 
         # add chromium driver
@@ -86,7 +100,7 @@ def handler(event, context):
         options.binary_location = '/usr/lib/chromium-browser/chromium-browser'
     
         # add chromium options
-        options.add_argument('window-size=1440,900')
+        options.add_argument('--start-maximized')
         options.add_argument('--headless')
         options.add_argument('--no-sandbox')
         options.add_argument('--single-process')
@@ -97,6 +111,15 @@ def handler(event, context):
 
         # get body of website
         driver.get(url)
+
+        # get screen dimensions
+        #screenwidth = driver.execute_script("return document.documentElement.scrollWidth")
+        screenwidth = 1440
+        screenheight = driver.execute_script("return document.documentElement.scrollHeight")
+
+        # maximize screen
+        print('dimensions ' + ' ' + str(screenwidth) + ' ' + str(screenheight))
+        driver.set_window_size(screenwidth, screenheight)
 
         # select body and press escape to close some pop ups
         body = driver.find_element_by_tag_name('body')
@@ -109,14 +132,8 @@ def handler(event, context):
         driver.close()
         driver.quit()
 
-        # compress png image using pngquant
-        process = subprocess.Popen('pngquant ' + tmpfile + ' -o ' + tmpfile + ' -f --skip-if-larger -v --speed 1', stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell = True, cwd = '/tmp', text = True)
-
-        stdout, stderr = process.communicate()
-        print(stdout)
-        print(stderr)
-
-		#exit_code = process.wait()
+        # compress png using pngquant
+        compress_png(tmpfile)
 
         # get end timestamp
         endts = time.time()
@@ -129,7 +146,7 @@ def handler(event, context):
         # return HTML response
         response = {
             "statusCode": 200,
-            "body": '<html><body><center>' + url + ' - took ' + str(round(timediff, 2)) + ' seconds <br /><img height = "100%" src = "data:image/png;base64,' + b64img + '" /></center></body></html>',
+            "body": '<html><body><center>' + url + ' - took ' + str(round(timediff, 2)) + ' seconds <br /><img src = "data:image/png;base64,' + b64img + '" /></center></body></html>',
             "headers": headers
         } 
         
