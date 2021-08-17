@@ -16,6 +16,11 @@ tracer = Tracer()
 bucketname = os.environ['s3bucket']
 s3_client = boto3.client('s3')
 
+headers = {
+    'Content-Type': 'text/html',
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload"
+}
+
 # convert image to base64
 def get_base64_encoded_image(image_path):
     with open(image_path, "rb") as img_file:
@@ -49,10 +54,8 @@ def handler(event, context):
             
             response = {
                 "statusCode": 200,
-                "body": '<html><body>invalid URL ' + rawurl + ' submitted</body></html>',
-                "headers": {
-                    'Content-Type': 'text/html'
-                }
+                "body": '<html><body><center>invalid URL ' + rawurl + ' submitted</center></body></html>',
+                "headers": headers
             } 
 
     # if no URL is submitted, return error
@@ -60,21 +63,22 @@ def handler(event, context):
 
         response = {
             "statusCode": 200,
-            "body": '<html><body>no URL submitted</body></html>',
-            "headers": {
-                'Content-Type': 'text/html'
-            }
+            "body": '<html><body><center>no URL submitted</center></body></html>',
+            "headers": headers
         } 
 
     # if response is empty, run chromium browser to take screenshot
     if response == '':
+
+        # get start timestamp
+        startts = time.time()
 
         # get url to resolve
         url = 'https://' + rawurl
         print('getting ' + url)
 
         # set tmp and file paths
-        fname = rawurl.replace('.', '_').replace('/','-') + '-screen.png'
+        fname = 'screenshots/' + domain + '/' + str(startts) + '-' + rawurl.replace('.', '_').replace('/','-') + '.png'
         tmpfile = '/tmp/screen.png'
 
         # add chromium driver
@@ -87,9 +91,6 @@ def handler(event, context):
         options.add_argument('--no-sandbox')
         options.add_argument('--single-process')
         options.add_argument('--disable-dev-shm-usage')
-
-        # get start timestamp
-        startts = time.time()
 
         # get url using chromium
         driver = webdriver.Chrome('/usr/lib/chromium-browser/chromedriver', chrome_options = options)
@@ -120,9 +121,7 @@ def handler(event, context):
         response = {
             "statusCode": 200,
             "body": '<html><body><center>' + url + ' - took ' + str(round(timediff, 2)) + ' seconds <br /><img height = "100%" src = "data:image/png;base64,' + b64img + '" /></center></body></html>',
-            "headers": {
-                'Content-Type': 'text/html'
-            }
+            "headers": headers
         } 
         
     # return html response    
