@@ -1,4 +1,4 @@
-import base64, boto3, os, socket, time
+import base64, boto3, os, socket, subprocess, time
 from codeguru_profiler_agent import with_lambda_profiler
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -98,7 +98,7 @@ def handler(event, context):
         # get body of website
         driver.get(url)
 
-        # press escape to close some pop ups
+        # select body and press escape to close some pop ups
         body = driver.find_element_by_tag_name('body')
         body.send_keys(Keys.ESCAPE)
 
@@ -108,6 +108,15 @@ def handler(event, context):
         # close chromium
         driver.close()
         driver.quit()
+
+        # compress png image using pngquant
+        process = subprocess.Popen('pngquant ' + tmpfile + ' -o ' + tmpfile + ' -f --skip-if-larger -v --speed 1', stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell = True, cwd = '/tmp', text = True)
+
+        stdout, stderr = process.communicate()
+        print(stdout)
+        print(stderr)
+
+		#exit_code = process.wait()
 
         # get end timestamp
         endts = time.time()

@@ -35,10 +35,11 @@ export class CdkScreenshotStack extends cdk.Stack {
     // define Lambda function using Docker image
     const lambda = new DockerImageFunction(this, "screenshotLambda", {
       code: DockerImageCode.fromImageAsset(dockerfile),
-      memorySize: 4096,
-      timeout: Duration.seconds(15),
+      memorySize: 2048,
+      timeout: Duration.seconds(10),
       tracing: Tracing.ACTIVE,
       reservedConcurrentExecutions: 2,
+      retryAttempts: 0,
       role: lambdaRole,
       environment: {
         "s3bucket": s3bucket.bucketName,
