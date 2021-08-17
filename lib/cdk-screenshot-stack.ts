@@ -5,9 +5,9 @@ import { DockerImageFunction, DockerImageCode } from "@aws-cdk/aws-lambda";
 import { Tracing } from '@aws-cdk/aws-lambda';
 import { CfnOutput, Duration } from '@aws-cdk/core';
 import { Bucket } from '@aws-cdk/aws-s3';
-import { HttpApi } from '@aws-cdk/aws-apigatewayv2';
-import { LambdaProxyIntegration } from '@aws-cdk/aws-apigatewayv2-integrations';
-import { AccountRootPrincipal, ServicePrincipal, Role, ManagedPolicy } from '@aws-cdk/aws-iam';
+import { HttpApi, HttpMethod } from '@aws-cdk/aws-apigatewayv2';
+import { LambdaProxyIntegration, HttpProxyIntegration } from '@aws-cdk/aws-apigatewayv2-integrations';
+import { ServicePrincipal, Role, ManagedPolicy } from '@aws-cdk/aws-iam';
 
 export class CdkScreenshotStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
@@ -49,12 +49,22 @@ export class CdkScreenshotStack extends cdk.Stack {
     s3bucket.grantReadWrite(lambda);
 
     // Create HTTP API Gateway
-    const apigw = new HttpApi(this, 'CdkTypescriptApi', {
+    const apigw = new HttpApi(this, 'screenshotAPI', {
       createDefaultStage: true,
       defaultIntegration: new LambdaProxyIntegration({
         handler: lambda
       })
     });
+
+    const faviconIntegration = new HttpProxyIntegration({
+      url: 'https://marek.rocks/favicon.ico'
+    });
+
+    apigw.addRoutes({
+      integration: faviconIntegration,
+      path: '/favicon.ico',
+      methods: [ HttpMethod.ANY ]
+    })
 
     // Print API Gateway URL
     new CfnOutput(this, 'API URL', { value: apigw.url ?? 'deployment error' });
