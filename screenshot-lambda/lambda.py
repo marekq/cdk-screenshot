@@ -5,63 +5,75 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.keys import Keys
 from aws_lambda_powertools import Logger, Tracer
 
-# aws powertools
+# AWS Lambda Powertools
 modules_to_be_patched = [ "boto3" ]
 tracer = Tracer(patch_modules = modules_to_be_patched)
 
+# Setup logger and tracer
 logger = Logger()
 tracer = Tracer()
 
-# get s3 bucket and setup client
+# Get S3 bucket and setup s3 client
 bucketname = os.environ['s3bucket']
 s3_client = boto3.client('s3')
 
+# Get SQS queue and setup sqs client
+sqs_queue_url = os.environ['sqsqueue']
+sqs_client = boto3.client('sqs')
+
+# Set static return headers
 headers = {
     'Content-Type': 'text/html',
     "strict-transport-security": "max-age=31536000; includeSubDomains; preload"
 }
 
-# convert image to base64
+# Upload screen shot to s3 using ONEZONE_IA storage class
+def upload_screenshot(tmpfile, bucketname, fname):
+    s3_client.upload_file(
+        Filename = tmpfile, 
+        Bucket = bucketname, 
+        Key = fname,
+        ExtraArgs = {
+            'StorageClass': 'ONEZONE_IA'
+        }
+    )
+
+# Convert image to base64
 @tracer.capture_method(capture_response = False)
 def get_base64_encoded_image(image_path):
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode('utf-8')
 
-
-# compress png image using pngquant
+# Send S3 path URI to SQS queue
 @tracer.capture_method(capture_response = False)
-def compress_png(tmpfile):
+def sqs_send(sqs_queue_url, bucketname, fname):
+    sqs_client.send_message(
+        QueueUrl = sqs_queue_url,
+        MessageBody = 'https://s3.amazonaws.com/' + bucketname + '/' + fname,
+    )
 
-    process = subprocess.Popen('pngquant ' + tmpfile + ' -o ' + tmpfile + ' -f --skip-if-larger -v --speed 1', stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell = True, cwd = '/tmp', text = True)
-
-    stdout, stderr = process.communicate()
-    print(stdout)
-    print(stderr)
-
-    #exit_code = process.wait()
-
-# lambda handler
+# Lambda handler
 @tracer.capture_lambda_handler(capture_response = False)
 @logger.inject_lambda_context(log_event = False)
 #@with_lambda_profiler(profiling_group_name = os.environ['AWS_CODEGURU_PROFILER_GROUP_NAME'])
 def handler(event, context):
     
-    # set empty html response
+    # Set empty html response
     response = ''
 
-    # get url from API input
+    # Get url from API input
     if len(event['rawPath']) > 1:
         rawurl = event['rawPath'][1:]
         domain = rawurl.split('/')[0]
 
-        # check if the dns domain is valid
+        # Check if the dns domain is valid
         try: 
 
             x = socket.gethostbyname(domain)
             print('ip ' + str(x) + ' for ' + rawurl)
             response = ''
 
-        # return error if domain does not return dns record
+        # Return error if domain does not return dns record
         except:
 
             print('invalid dns ' + rawurl + ', setting github.com')
@@ -72,7 +84,7 @@ def handler(event, context):
                 "headers": headers
             } 
 
-    # if no URL is submitted, return error
+    # If no URL is submitted, return error
     else:
 
         response = {
@@ -81,82 +93,76 @@ def handler(event, context):
             "headers": headers
         } 
 
-    # if response is empty, run chromium browser to take screenshot
+    # If response is empty, run chromium browser to take screenshot
     if response == '':
 
-        # get start timestamp
+        # Get start timestamp
         startts = time.time()
 
-        # get url to resolve
+        # Get url to resolve
         url = 'https://' + rawurl
         print('getting ' + url)
 
-        # set tmp and file paths
+        # Set tmp and file paths
         fname = 'screenshots/' + domain + '/' + str(int(startts)) + '-' + rawurl.replace('.', '_').replace('/','-') + '.png'
         tmpfile = '/tmp/screen.png'
 
-        # add chromium driver
+        # Add chromium driver
         options = Options()
         options.binary_location = '/usr/lib/chromium-browser/chromium-browser'
     
-        # add chromium options
+        # Add chromium options
         options.add_argument('--start-maximized')
         options.add_argument('--headless')
         options.add_argument('--no-sandbox')
         options.add_argument('--single-process')
         options.add_argument('--disable-dev-shm-usage')
 
-        # get url using chromium
+        # Get url using chromium
         driver = webdriver.Chrome('/usr/lib/chromium-browser/chromedriver', chrome_options = options)
 
-        # get body of website
+        # Get body of website
         driver.get(url)
 
-        # get screen dimensions
+        # Get screen dimensions
         #screenwidth = driver.execute_script("return document.documentElement.scrollWidth")
         screenwidth = 1440
         screenheight = driver.execute_script("return document.documentElement.scrollHeight")
 
-        # maximize screen
+        # Maximize screen
         print('dimensions ' + ' ' + str(screenwidth) + ' ' + str(screenheight))
         driver.set_window_size(screenwidth, screenheight)
 
-        # select body and press escape to close some pop ups
+        # Select body and press escape to close some pop ups
         body = driver.find_element_by_tag_name('body')
         body.send_keys(Keys.ESCAPE)
 
-        # save screenshot
+        # Save screenshot
         body.screenshot(tmpfile)
 
-        # close chromium
+        # Close chromium
         driver.close()
         driver.quit()
 
-        # compress png using pngquant
-        compress_png(tmpfile)
-
-        # get end timestamp
+        # Get end timestamp
         endts = time.time()
         timediff = endts - startts
 
-        # upload screen shot to s3 using ONEZONE_IA storage class
-        s3_client.upload_file(
-            Filename = tmpfile, 
-            Bucket = bucketname, 
-            Key = fname,
-            ExtraArgs = {
-                'StorageClass': 'ONEZONE_IA'
-            }
-        )
+        # Upload screenshot to S3
+        upload_screenshot(tmpfile, bucketname, fname)
 
+        # Send SQS message with screenshot url
+        sqs_send(sqs_queue_url, bucketname, fname)
+
+        # Encode image to base64 for HTML output
         b64img = get_base64_encoded_image(tmpfile)
         
-        # return HTML response
+        # Return HTML response
         response = {
             "statusCode": 200,
             "body": '<html><body><center>' + url + ' - took ' + str(round(timediff, 2)) + ' seconds <br /><img src = "data:image/png;base64,' + b64img + '" /></center></body></html>',
             "headers": headers
         } 
         
-    # return html response    
+    # Return HTML response    
     return response
