@@ -47,26 +47,10 @@ export class CdkScreenshotStack extends Stack {
     // Create the screenshot Lambda IAM role
     const screenshotRole = new Role(this, 'screenshotRole', {
       assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
-      inlinePolicies: {
-        translation: new PolicyDocument({
-          statements: [ new PolicyStatement(
-            {
-              effect: Effect.ALLOW,
-              actions: [
-                'dynamodb:PutItem'
-              ],
-              resources: [
-                dynamodbTable.tableArn
-              ]
-            }
-          )]
-        })
-      },
       managedPolicies: [
         ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
         ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
         ManagedPolicy.fromAwsManagedPolicyName('AmazonCodeGuruProfilerAgentAccess'),
-        ManagedPolicy.fromAwsManagedPolicyName('AmazonTextractFullAccess')
       ]
     });
 
@@ -141,6 +125,7 @@ export class CdkScreenshotStack extends Stack {
 
     // Grant S3 and DynamoDB read write access to Lambda function
     s3bucket.grantWrite(screenshotLambda);
+    s3bucket.grantReadWrite(analyzeLambda);
 
     // Create HTTP API Gateway with route to screenshot Lambda function
     const apigw = new HttpApi(this, 'screenshotAPI', {
