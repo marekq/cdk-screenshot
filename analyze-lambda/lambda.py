@@ -42,7 +42,7 @@ def dynamodb_put(rekognition_text, timest, domain, s3path):
     
     ddb_client.put_item(
         Item = {
-            'timest': timest,
+            'timestamp': int(timest),
             'domain': domain,
             'text': rekognition_text,
             's3path': s3path
@@ -56,8 +56,9 @@ def compress_png(tmpfile):
     process = subprocess.Popen('pngquant ' + tmpfile + ' -o ' + tmpfile + ' -f --skip-if-larger -v --speed 1', stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell = True, cwd = '/tmp', text = True)
 
     stdout, stderr = process.communicate()
-    print(stdout)
-    print(stderr)
+    #print(stdout)
+    #print(stderr)
+    print('compressed png ' + tmpfile)
 
     #exit_code = process.wait()
 
@@ -70,15 +71,17 @@ def get_s3_file(bucketname, s3path, tmppath):
 
 # Upload screen shot to s3 using ONEZONE_IA storage class
 @tracer.capture_method(capture_response = False)
-def put_s3_file(bucketname, s3path, tmppath):
-        s3_client.upload_file(
+def put_s3_file(bucketname, s3path, fname):
+
+    s3_client.upload_file(
         Filename = fname, 
         Bucket = bucketname, 
-        Key = fname,
+        Key = s3path,
         ExtraArgs = {
             'StorageClass': 'ONEZONE_IA'
         }
     )
+
 # Lambda handler
 @tracer.capture_lambda_handler(capture_response = False)
 @logger.inject_lambda_context(log_event = False)
