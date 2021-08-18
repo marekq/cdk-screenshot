@@ -76,7 +76,7 @@ export class CdkScreenshotStack extends Stack {
         ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
         ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
         ManagedPolicy.fromAwsManagedPolicyName('AmazonCodeGuruProfilerAgentAccess'),
-        ManagedPolicy.fromAwsManagedPolicyName('AmazonTextractFullAccess')
+        ManagedPolicy.fromAwsManagedPolicyName('AmazonRekognitionReadOnlyAccess')
       ]
     });
 

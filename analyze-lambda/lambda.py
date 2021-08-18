@@ -14,19 +14,19 @@ tracer = Tracer()
 bucketname = os.environ['s3bucket']
 s3_client = boto3.client('s3')
 
-# Setup Textract client
-textract_client = boto3.client('textract')
+# Setup Rekognition client
+rekognition_client = boto3.client('rekognition')
 
 # Setup DynamoDB client
 dynamodb = boto3.resource('dynamodb')
 ddb_client = dynamodb.Table(os.environ['dynamodb_table'])
 
-# Textract image to text
+# Rekognition image to text
 @tracer.capture_method(capture_response = False)
-def textract_image(fname):
+def rekognition_image(fname):
 
-    response = textract_client.detect_document_text(
-        Document = {
+    response = rekognition_client.detect_text(
+        Image = {
             'S3Object': {
                 'Bucket': bucketname,
                 'Name': fname
@@ -38,13 +38,13 @@ def textract_image(fname):
 
 # Put record to DynamoDB
 @tracer.capture_method(capture_response = False)
-def dynamodb_put(textract, timest, domain, s3path):
+def dynamodb_put(rekognition_text, timest, domain, s3path):
     
     ddb_client.put_item(
         Item = {
             'timest': timest,
             'domain': domain,
-            'text': textract,
+            'text': rekognition_text,
             's3path': s3path
         }
     )
@@ -67,6 +67,18 @@ def get_s3_file(bucketname, s3path, tmppath):
     
     s3_client.download_file(bucketname, s3path, tmppath)
 
+
+# Upload screen shot to s3 using ONEZONE_IA storage class
+@tracer.capture_method(capture_response = False)
+def put_s3_file(bucketname, s3path, tmppath):
+        s3_client.upload_file(
+        Filename = fname, 
+        Bucket = bucketname, 
+        Key = fname,
+        ExtraArgs = {
+            'StorageClass': 'ONEZONE_IA'
+        }
+    )
 # Lambda handler
 @tracer.capture_lambda_handler(capture_response = False)
 @logger.inject_lambda_context(log_event = False)
@@ -84,23 +96,17 @@ def handler(event, context):
     timest = record.split('amazonaws.com/')[1].split('/', 3)[3].split('-', 1)[0]
     fname = '/tmp/screen.png'
 
+    # Get S3 file
     get_s3_file(s3bucket, s3path, fname)
 
     # Compress png using pngquant
     compress_png(fname)
 
-    # Upload screen shot to s3 using ONEZONE_IA storage class
-    s3_client.upload_file(
-        Filename = fname, 
-        Bucket = bucketname, 
-        Key = fname,
-        ExtraArgs = {
-            'StorageClass': 'ONEZONE_IA'
-        }
-    )
+    # Upload S3 file
+    put_s3_file(s3bucket, s3path, fname)
 
-    textract = textract_image(fname)
-    print(textract)
+    #rekognition = rekognition_image(fname)
+    #print(str(rekognition))
 
     # Put record to DynamoDB
-    dynamodb_put(textract, timest, domain, fname)
+    dynamodb_put('rekognition', timest, domain, fname)
