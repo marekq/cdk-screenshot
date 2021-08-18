@@ -139,8 +139,16 @@ def handler(event, context):
         endts = time.time()
         timediff = endts - startts
 
-        # upload screen shot to s3
-        s3_client.upload_file(tmpfile, bucketname, fname)
+        # upload screen shot to s3 using ONEZONE_IA storage class
+        s3_client.upload_file(
+            Filename = tmpfile, 
+            Bucket = bucketname, 
+            Key = fname,
+            ExtraArgs = {
+                'StorageClass': 'ONEZONE_IA'
+            }
+        )
+
         b64img = get_base64_encoded_image(tmpfile)
         
         # return HTML response
