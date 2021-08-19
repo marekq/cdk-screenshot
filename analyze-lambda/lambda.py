@@ -1,4 +1,4 @@
-import boto3, os, subprocess
+import boto3, os, subprocess, time
 from codeguru_profiler_agent import with_lambda_profiler
 from aws_lambda_powertools import Logger, Tracer
 
@@ -42,14 +42,16 @@ def rekognition_image(fname):
 
 # Put record to DynamoDB
 @tracer.capture_method(capture_response = False)
-def dynamodb_put(rekognition_text, timest, domain, s3path):
+def dynamodb_put(rekognition_text, timest, domain, s3path, beforesize, aftersize):
     
     ddb_client.put_item(
         Item = {
             'timestamp': int(timest),
             'domain': domain,
             'text': rekognition_text,
-            's3path': s3path
+            's3path': s3path,
+            'beforesize': beforesize,
+            'aftersize': aftersize
         }
     )
 
@@ -57,21 +59,24 @@ def dynamodb_put(rekognition_text, timest, domain, s3path):
 @tracer.capture_method(capture_response = False)
 def compress_png(tmpfile):
 
+    before_size = os.stat(tmpfile).st_size
     process = subprocess.Popen('pngquant ' + tmpfile + ' -o ' + tmpfile + ' -f --skip-if-larger -v --speed 1', stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell = True, cwd = '/tmp', text = True)
 
     stdout, stderr = process.communicate()
     #print(stdout)
     #print(stderr)
-    print('compressed png ' + tmpfile)
+    after_size = os.stat(tmpfile).st_size
 
-    #exit_code = process.wait()
+    print('compressed png ' + tmpfile + ' from ' + str(before_size) + ' to ' + str(after_size))
+
+    return before_size, after_size
 
 # Compress png image using pngquant
 @tracer.capture_method(capture_response = False)
 def get_s3_file(bucketname, s3path, tmppath):
     
     s3_client.download_file(bucketname, s3path, tmppath)
-
+    print('downloaded ' + s3path + ' to ' + tmppath)
 
 # Upload screen shot to s3 using ONEZONE_IA storage class
 @tracer.capture_method(capture_response = False)
@@ -82,9 +87,13 @@ def put_s3_file(bucketname, s3path, fname):
         Bucket = bucketname, 
         Key = s3path,
         ExtraArgs = {
-            'StorageClass': 'ONEZONE_IA'
+            'StorageClass': 'ONEZONE_IA',
+            'ACL': 'public-read',
+            'ContentType': 'image/png'
         }
     )
+
+    print('uploaded ' + fname + ' to ' + bucketname + '/' + s3path)
 
 # Lambda handler
 @tracer.capture_lambda_handler(capture_response = False)
@@ -92,9 +101,6 @@ def put_s3_file(bucketname, s3path, fname):
 #@with_lambda_profiler(profiling_group_name = os.environ['AWS_CODEGURU_PROFILER_GROUP_NAME'])
 def handler(event, context):
     
-    # Set empty html response
-    print(event)
-
     # Get event fields and set path
     record = event['Records'][0]['body']
     s3bucket = record.split('amazonaws.com/')[1].split('/')[0]
@@ -103,18 +109,27 @@ def handler(event, context):
     timest = record.split('amazonaws.com/')[1].split('/', 3)[3].split('-', 1)[0]
     fname = '/tmp/screen.png'
 
+    print('s3bucket: ' + s3bucket)
+    print('s3path: ' + s3path)
+    print('domain: ' + domain)
+    print('timest: ' + timest)
+    print('fname: ' + fname)
+
     # Get S3 file
     get_s3_file(s3bucket, s3path, fname)
 
     # Compress png using pngquant
-    compress_png(fname)
+    beforesize, aftersize = compress_png(fname)
 
     # Upload S3 file
     put_s3_file(s3bucket, s3path, fname)
 
+    # Sleep for 1 second to allow S3 to catch up
+    #time.sleep(1)
+
     # Get text from image using Rekognition
-    rekognition = rekognition_image(fname)
-    print(str(rekognition))
+    #rekognition = rekognition_image(fname)
+    #print(str(rekognition))
 
     # Put record to DynamoDB
-    dynamodb_put(rekognition, timest, domain, s3path)
+    dynamodb_put('rekognition', timest, domain, s3path, beforesize, aftersize)

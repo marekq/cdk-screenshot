@@ -57,21 +57,6 @@ export class CdkScreenshotStack extends Stack {
     // Create the analyze Lambda IAM role
     const analyzeRole = new Role(this, 'analyzeRole', {
       assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
-      inlinePolicies: {
-        translation: new PolicyDocument({
-          statements: [ new PolicyStatement(
-            {
-              effect: Effect.ALLOW,
-              actions: [
-                'dynamodb:PutItem'
-              ],
-              resources: [
-                dynamodbTable.tableArn
-              ]
-            }
-          )]
-        })
-      },
       managedPolicies: [
         ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
         ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
@@ -125,9 +110,17 @@ export class CdkScreenshotStack extends Stack {
     sqsQueue.grantSendMessages(screenshotLambda);
     sqsQueue.grantConsumeMessages(analyzeLambda);
 
-    // Grant S3 and DynamoDB read write access to Lambda function
-    s3bucket.grantWrite(screenshotLambda);
-    s3bucket.grantReadWrite(analyzeLambda);
+    // Grant S3 write access to screenshot Lambda function
+    s3bucket.grantPut(screenshotLambda);
+    s3bucket.grantPutAcl(screenshotLambda);
+
+    // Grant S3 read write access to analyze Lambda function
+    s3bucket.grantPut(analyzeLambda);
+    s3bucket.grantPutAcl(analyzeLambda);
+    s3bucket.grantRead(analyzeLambda);
+
+    // Grant DynamoDB write access to analyze Lambda function
+    dynamodbTable.grantWriteData(analyzeLambda);
 
     // Create HTTP API Gateway with route to screenshot Lambda function
     const apigw = new HttpApi(this, 'screenshotAPI', {
@@ -147,10 +140,10 @@ export class CdkScreenshotStack extends Stack {
       integration: faviconIntegration,
       path: '/favicon.ico',
       methods: [ HttpMethod.ANY ]
-    })
+    });
 
     // Print API Gateway URL
     new CfnOutput(this, 'API URL', { value: apigw.url ?? 'deployment error' });
 
-  }
-}
+  };
+};

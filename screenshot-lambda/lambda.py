@@ -1,4 +1,4 @@
-import base64, boto3, os, socket,, time
+import boto3, os, socket, time
 from codeguru_profiler_agent import with_lambda_profiler
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -34,15 +34,11 @@ def upload_screenshot(tmpfile, bucketname, fname):
         Bucket = bucketname, 
         Key = fname,
         ExtraArgs = {
-            'StorageClass': 'ONEZONE_IA'
+            'StorageClass': 'STANDARD',
+            'ACL': 'public-read',
+            'ContentType': 'image/png'
         }
     )
-
-# Convert image to base64
-@tracer.capture_method(capture_response = False)
-def get_base64_encoded_image(image_path):
-    with open(image_path, "rb") as img_file:
-        return base64.b64encode(img_file.read()).decode('utf-8')
 
 # Send S3 path URI to SQS queue
 @tracer.capture_method(capture_response = False)
@@ -51,6 +47,20 @@ def sqs_send(sqs_queue_url, bucketname, fname):
         QueueUrl = sqs_queue_url,
         MessageBody = 'https://s3.amazonaws.com/' + bucketname + '/' + fname,
     )
+
+# Generate S3 Signed URL
+@tracer.capture_method(capture_response = False)
+def generate_signed_url(bucketname, fname):
+    presigned_url = s3_client.generate_presigned_url(
+        ClientMethod = 'get_object',
+        Params = {
+            'Bucket': bucketname,
+            'Key': fname
+        },
+        ExpiresIn = 3600
+    )
+
+    return presigned_url
 
 # Lambda handler
 @tracer.capture_lambda_handler(capture_response = False)
@@ -129,6 +139,9 @@ def handler(event, context):
         screenwidth = 1440
         screenheight = driver.execute_script("return document.documentElement.scrollHeight")
 
+        if screenheight == 0:
+            screenheight = 1024
+
         # Maximize screen
         print('dimensions ' + ' ' + str(screenwidth) + ' ' + str(screenheight))
         driver.set_window_size(screenwidth, screenheight)
@@ -144,23 +157,23 @@ def handler(event, context):
         driver.close()
         driver.quit()
 
-        # Get end timestamp
-        endts = time.time()
-        timediff = endts - startts
-
         # Upload screenshot to S3
         upload_screenshot(tmpfile, bucketname, fname)
 
         # Send SQS message with screenshot url
         sqs_send(sqs_queue_url, bucketname, fname)
 
-        # Encode image to base64 for HTML output
-        b64img = get_base64_encoded_image(tmpfile)
-        
+        # Generate S3 pre-signed URL
+        presigned_url = generate_signed_url(bucketname, fname)
+
+        # Get end timestamp
+        endts = time.time()
+        timediff = endts - startts
+
         # Return HTML response
         response = {
             "statusCode": 200,
-            "body": '<html><body><center>' + url + ' - took ' + str(round(timediff, 2)) + ' seconds <br /><img src = "data:image/png;base64,' + b64img + '" /></center></body></html>',
+            "body": '<html><body><center>' + url + ' - took ' + str(round(timediff, 2)) + ' seconds <br /><img src = ' + presigned_url + '></center></body></html>',
             "headers": headers
         } 
         
