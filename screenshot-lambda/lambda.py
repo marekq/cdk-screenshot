@@ -1,4 +1,4 @@
-import base64, boto3, os, socket, subprocess, time
+import base64, boto3, os, socket,, time
 from codeguru_profiler_agent import with_lambda_profiler
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options

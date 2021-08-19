@@ -1,4 +1,4 @@
-import base64, boto3, os, socket, subprocess, time
+import boto3, os, subprocess
 from codeguru_profiler_agent import with_lambda_profiler
 from aws_lambda_powertools import Logger, Tracer
 
@@ -34,7 +34,11 @@ def rekognition_image(fname):
         }
     )
 
-    return response
+    result = []
+    for text in response['TextDetections']:
+        result.append(text['DetectedText'])
+
+    return ' '.join(result)
 
 # Put record to DynamoDB
 @tracer.capture_method(capture_response = False)
@@ -108,8 +112,9 @@ def handler(event, context):
     # Upload S3 file
     put_s3_file(s3bucket, s3path, fname)
 
-    #rekognition = rekognition_image(fname)
-    #print(str(rekognition))
+    # Get text from image using Rekognition
+    rekognition = rekognition_image(fname)
+    print(str(rekognition))
 
     # Put record to DynamoDB
-    dynamodb_put('rekognition', timest, domain, fname)
+    dynamodb_put(rekognition, timest, domain, s3path)
