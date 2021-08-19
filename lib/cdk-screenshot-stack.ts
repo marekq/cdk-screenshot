@@ -90,6 +90,7 @@ export class CdkScreenshotStack extends Stack {
       retryAttempts: 0,
       role: analyzeRole,
       deadLetterQueueEnabled: true,
+      logRetention: 14,
       environment: {
         's3bucket': s3bucket.bucketName,
         'dynamodb_table': dynamodbTable.tableName,
@@ -107,6 +108,7 @@ export class CdkScreenshotStack extends Stack {
       retryAttempts: 0,
       role: screenshotRole,
       deadLetterQueueEnabled: true,
+      logRetention: 14,
       environment: {
         'sqsqueue': sqsQueue.queueUrl,
         's3bucket': s3bucket.bucketName,
