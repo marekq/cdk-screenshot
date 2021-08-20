@@ -127,6 +127,7 @@ def handler(event, context):
         options.add_argument('--no-sandbox')
         options.add_argument('--single-process')
         options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--user-agent=Mozilla/5.0 (X11; NetBSD) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.116 Safari/537.36')
 
         # Get url using chromium
         driver = webdriver.Chrome('/usr/bin/chromedriver', chrome_options = options)

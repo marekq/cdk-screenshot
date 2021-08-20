@@ -1,7 +1,7 @@
 import path = require('path');
 import { AttributeType, BillingMode, Table } from '@aws-cdk/aws-dynamodb';
 import { Bucket } from '@aws-cdk/aws-s3';
-import { CfnOutput, Construct, Duration, Stack, StackProps } from '@aws-cdk/core';
+import { CfnOutput, Construct, Duration, RemovalPolicy, Stack, StackProps } from '@aws-cdk/core';
 import { ComputePlatform, ProfilingGroup } from '@aws-cdk/aws-codeguruprofiler';
 import { DockerImageCode, DockerImageFunction, Tracing } from '@aws-cdk/aws-lambda';
 import { HttpApi, HttpMethod } from '@aws-cdk/aws-apigatewayv2';
@@ -28,7 +28,10 @@ export class CdkScreenshotStack extends Stack {
     })
 
     // Create S3 bucket
-    const s3bucket = new Bucket(this, 'screenshotBucket');
+    const s3bucket = new Bucket(this, 'screenshotBucket', {
+      autoDeleteObjects: true,
+      removalPolicy: RemovalPolicy.DESTROY
+    });
 
     // Create the screenshot profiling group
     const profileScreenshot = new ProfilingGroup(this, 'profileScreenshot', {
@@ -75,7 +78,7 @@ export class CdkScreenshotStack extends Stack {
       memorySize: 2048,
       timeout: Duration.seconds(60),
       tracing: Tracing.ACTIVE,
-      reservedConcurrentExecutions: 1,
+      reservedConcurrentExecutions: 3,
       retryAttempts: 0,
       role: analyzeRole,
       deadLetterQueueEnabled: true,
@@ -91,7 +94,7 @@ export class CdkScreenshotStack extends Stack {
     // create Chrome Lambda function using Docker image
     const screenshotLambda = new DockerImageFunction(this, 'screenshotLambda', {
       code: DockerImageCode.fromImageAsset(screenshotDocker),
-      memorySize: 2048,
+      memorySize: 4096,
       timeout: Duration.seconds(30),
       tracing: Tracing.ACTIVE,
       reservedConcurrentExecutions: 3,
