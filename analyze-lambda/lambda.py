@@ -1,4 +1,4 @@
-import boto3, os, pytesseract, subprocess
+import boto3, os, pytesseract, subprocess, time
 from codeguru_profiler_agent import with_lambda_profiler
 from aws_lambda_powertools import Logger, Tracer
 
