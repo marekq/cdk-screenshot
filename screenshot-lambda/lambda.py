@@ -65,7 +65,7 @@ def generate_signed_url(bucketname, fname):
 # Lambda handler
 @tracer.capture_lambda_handler(capture_response = False)
 @logger.inject_lambda_context(log_event = False)
-#@with_lambda_profiler(profiling_group_name = os.environ['AWS_CODEGURU_PROFILER_GROUP_NAME'])
+@with_lambda_profiler(profiling_group_name = os.environ['AWS_CODEGURU_PROFILER_GROUP_NAME'])
 def handler(event, context):
     
     # Set empty html response

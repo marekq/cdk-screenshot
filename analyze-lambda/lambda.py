@@ -27,6 +27,7 @@ def dynamodb_put(rekognition_text, timest, domain, s3path, beforesize, aftersize
             'timestamp': int(timest),
             'domain': domain,
             'text': rekognition_text,
+            's3bucket': bucketname,
             's3path': s3path,
             'beforesize': beforesize,
             'aftersize': aftersize,
@@ -50,7 +51,6 @@ def compress_png(tmpfile):
 
     endts = time.time()
     compress_time = int((endts - startts) * 1000)
-
     after_size = os.stat(tmpfile).st_size
 
     print('compressed png ' + tmpfile + ' from ' + str(before_size) + ' to ' + str(after_size))
@@ -62,7 +62,7 @@ def compress_png(tmpfile):
 def get_s3_file(bucketname, s3path, tmppath):
     
     s3_client.download_file(bucketname, s3path, tmppath)
-    print('downloaded ' + s3path + ' to ' + tmppath)
+    print('downloaded ' + bucketname + '/' + s3path + ' to ' + tmppath)
 
 # Upload screen shot to s3 using ONEZONE_IA storage class
 @tracer.capture_method(capture_response = False)
@@ -92,14 +92,14 @@ def image_to_text(fname):
 
     endts = time.time()
     ocr_time = int((endts - startts) * 1000)
+    print('completed OCR in ' + str(ocr_time) + ' ms')
 
     return text, ocr_time
-
 
 # Lambda handler
 @tracer.capture_lambda_handler(capture_response = False)
 @logger.inject_lambda_context(log_event = False)
-#@with_lambda_profiler(profiling_group_name = os.environ['AWS_CODEGURU_PROFILER_GROUP_NAME'])
+@with_lambda_profiler(profiling_group_name = os.environ['AWS_CODEGURU_PROFILER_GROUP_NAME'])
 def handler(event, context):
     
     # Get event fields and set path
@@ -110,13 +110,11 @@ def handler(event, context):
     timest = record.split('amazonaws.com/')[1].split('/', 3)[3].split('-', 1)[0]
     fname = '/tmp/screen.png'
 
-    print('s3bucket: ' + s3bucket + ' - s3path: ' + s3path + ' - domain: ' + domain + ' - timest: ' + timest +' - fname: ' + fname)
-
     # Get S3 file
     get_s3_file(s3bucket, s3path, fname)
 
     # Compress png using pngquant
-    beforesize, aftersize, compress_time = compress_png(fname)
+    before_size, after_size, compress_time = compress_png(fname)
 
     # Upload S3 file
     put_s3_file(s3bucket, s3path, fname)
@@ -125,4 +123,4 @@ def handler(event, context):
     text, ocr_time = image_to_text(fname)
 
     # Put record to DynamoDB
-    dynamodb_put(text, timest, domain, s3path, beforesize, aftersize, compress_time, ocr_time)
+    dynamodb_put(text, timest, domain, s3path, before_size, after_size, compress_time, ocr_time)

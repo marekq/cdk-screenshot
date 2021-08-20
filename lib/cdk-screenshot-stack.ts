@@ -67,7 +67,7 @@ export class CdkScreenshotStack extends Stack {
     // create Analyze Lambda function using Docker image
     const analyzeLambda = new DockerImageFunction(this, 'analyzeLambda', {
       code: DockerImageCode.fromImageAsset(analyzeDocker),
-      memorySize: 2048,
+      memorySize: 1024,
       timeout: Duration.seconds(60),
       tracing: Tracing.ACTIVE,
       reservedConcurrentExecutions: 3,
@@ -85,8 +85,8 @@ export class CdkScreenshotStack extends Stack {
     // create Chrome Lambda function using Docker image
     const screenshotLambda = new DockerImageFunction(this, 'screenshotLambda', {
       code: DockerImageCode.fromImageAsset(screenshotDocker),
-      memorySize: 2048,
-      timeout: Duration.seconds(30),
+      memorySize: 4096,
+      timeout: Duration.seconds(20),
       tracing: Tracing.ACTIVE,
       reservedConcurrentExecutions: 3,
       retryAttempts: 0,
