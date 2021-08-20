@@ -1,10 +1,14 @@
-FROM ubuntu:latest
+FROM amazonlinux:latest
 
-RUN apt-get update 
-RUN apt-get install software-properties-common -y 
-RUN add-apt-repository ppa:saiarcot895/chromium-beta -y
-RUN apt-get install chromium-browser chromium-chromedriver python3-pip -y
-RUN apt-get autoremove && apt-get autoclean
+RUN amazon-linux-extras install epel -y
+RUN yum update -y
+RUN yum install chromium chromedriver python3-pip -y
+
+RUN curl -O https://lambda-insights-extension.s3-ap-northeast-1.amazonaws.com/amazon_linux/lambda-insights-extension.rpm && \
+    rpm -U lambda-insights-extension.rpm && \
+    rm -f lambda-insights-extension.rpm
+
+RUN yum clean all && rm -rf /var/cache/yum
 
 COPY requirements.txt ./
 RUN pip3 install --no-cache-dir -r requirements.txt

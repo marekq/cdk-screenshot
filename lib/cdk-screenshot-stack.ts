@@ -30,8 +30,13 @@ export class CdkScreenshotStack extends Stack {
     // Create S3 bucket
     const s3bucket = new Bucket(this, 'screenshotBucket');
 
-    // Create the codeguru profiling group
-    const pgroup = new ProfilingGroup(this, 'screenshotProfiling', {
+    // Create the screenshot profiling group
+    const profileScreenshot = new ProfilingGroup(this, 'profileScreenshot', {
+      computePlatform: ComputePlatform.AWS_LAMBDA
+    });
+
+    // Create the analuze profiling group
+    const profileAnalyze = new ProfilingGroup(this, 'profileAnalyze', {
       computePlatform: ComputePlatform.AWS_LAMBDA
     });
 
@@ -67,36 +72,38 @@ export class CdkScreenshotStack extends Stack {
     // create Analyze Lambda function using Docker image
     const analyzeLambda = new DockerImageFunction(this, 'analyzeLambda', {
       code: DockerImageCode.fromImageAsset(analyzeDocker),
-      memorySize: 1024,
+      memorySize: 2048,
       timeout: Duration.seconds(60),
       tracing: Tracing.ACTIVE,
-      reservedConcurrentExecutions: 3,
+      reservedConcurrentExecutions: 1,
       retryAttempts: 0,
       role: analyzeRole,
       deadLetterQueueEnabled: true,
       logRetention: 14,
+      description: "Compress and analyze the screenshot image",
       environment: {
         's3bucket': s3bucket.bucketName,
         'dynamodb_table': dynamodbTable.tableName,
-        'AWS_CODEGURU_PROFILER_GROUP_NAME': pgroup.profilingGroupName
+        'AWS_CODEGURU_PROFILER_GROUP_NAME': profileAnalyze.profilingGroupName
       }
     });
 
     // create Chrome Lambda function using Docker image
     const screenshotLambda = new DockerImageFunction(this, 'screenshotLambda', {
       code: DockerImageCode.fromImageAsset(screenshotDocker),
-      memorySize: 4096,
-      timeout: Duration.seconds(20),
+      memorySize: 2048,
+      timeout: Duration.seconds(30),
       tracing: Tracing.ACTIVE,
       reservedConcurrentExecutions: 3,
       retryAttempts: 0,
       role: screenshotRole,
       deadLetterQueueEnabled: true,
       logRetention: 14,
+      description: "Take a screenshot of a website and store it on S3",
       environment: {
         'sqsqueue': sqsQueue.queueUrl,
         's3bucket': s3bucket.bucketName,
-        'AWS_CODEGURU_PROFILER_GROUP_NAME': pgroup.profilingGroupName
+        'AWS_CODEGURU_PROFILER_GROUP_NAME': profileScreenshot.profilingGroupName
       }
     });
 

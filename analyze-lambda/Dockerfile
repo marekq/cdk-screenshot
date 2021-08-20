@@ -1,10 +1,16 @@
-FROM ubuntu:latest
+FROM amazonlinux:latest
 
 ENV DEBIAN_FRONTEND=noninteractive 
 
-RUN apt-get update 
-RUN apt-get install python3-pip python3-pil pngquant tesseract-ocr-eng -y
-RUN apt-get autoremove && apt-get autoclean
+RUN amazon-linux-extras install epel -y
+RUN yum update -y
+RUN yum install python3-pip python-pillow pngquant tesseract -y
+
+RUN curl -O https://lambda-insights-extension.s3-ap-northeast-1.amazonaws.com/amazon_linux/lambda-insights-extension.rpm && \
+    rpm -U lambda-insights-extension.rpm && \
+    rm -f lambda-insights-extension.rpm
+
+RUN yum clean all && rm -rf /var/cache/yum
 
 COPY requirements.txt ./
 RUN pip3 install --no-cache-dir -r requirements.txt

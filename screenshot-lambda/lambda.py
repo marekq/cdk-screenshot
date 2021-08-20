@@ -119,7 +119,7 @@ def handler(event, context):
 
         # Add chromium driver
         options = Options()
-        options.binary_location = '/usr/lib/chromium-browser/chromium-browser'
+        options.binary_location = '/usr/bin/chromium-browser'
     
         # Add chromium options
         options.add_argument('--start-maximized')
@@ -129,7 +129,7 @@ def handler(event, context):
         options.add_argument('--disable-dev-shm-usage')
 
         # Get url using chromium
-        driver = webdriver.Chrome('/usr/lib/chromium-browser/chromedriver', chrome_options = options)
+        driver = webdriver.Chrome('/usr/bin/chromedriver', chrome_options = options)
 
         # Get body of website
         driver.get(url)
@@ -147,7 +147,7 @@ def handler(event, context):
         driver.set_window_size(screenwidth, screenheight)
 
         # Select body and press escape to close some pop ups
-        body = driver.find_element_by_tag_name('body')
+        body = driver.find_element_by_xpath('/html')
         body.send_keys(Keys.ESCAPE)
 
         # Save screenshot

@@ -20,12 +20,13 @@ ddb_client = dynamodb.Table(os.environ['dynamodb_table'])
 
 # Put record to DynamoDB
 @tracer.capture_method(capture_response = False)
-def dynamodb_put(rekognition_text, timest, domain, s3path, beforesize, aftersize, compress_time, ocr_time):
+def dynamodb_put(rekognition_text, timest, domain, s3path, beforesize, aftersize, compress_time, ocr_time, url):
     
     ddb_client.put_item(
         Item = {
             'timestamp': int(timest),
             'domain': domain,
+            'url': url,
             'text': rekognition_text,
             's3bucket': bucketname,
             's3path': s3path,
@@ -53,7 +54,7 @@ def compress_png(tmpfile):
     compress_time = int((endts - startts) * 1000)
     after_size = os.stat(tmpfile).st_size
 
-    print('compressed png ' + tmpfile + ' from ' + str(before_size) + ' to ' + str(after_size))
+    print('compressed png in ' + str(compress_time) + ' ms - ' + tmpfile + ' from ' + str(before_size) + ' to ' + str(after_size))
 
     return before_size, after_size, compress_time
 
@@ -106,7 +107,12 @@ def handler(event, context):
     record = event['Records'][0]['body']
     s3bucket = record.split('amazonaws.com/')[1].split('/')[0]
     s3path = record.split('amazonaws.com/')[1].split('/', 1)[1]
+    
+    # Get domain and URL
     domain = record.split('amazonaws.com/')[1].split('/', 3)[2]
+    url = 'https://' + domain + '/' + s3path.split('/', 1)[1]
+
+    # Get timestamp
     timest = record.split('amazonaws.com/')[1].split('/', 3)[3].split('-', 1)[0]
     fname = '/tmp/screen.png'
 
@@ -123,4 +129,4 @@ def handler(event, context):
     text, ocr_time = image_to_text(fname)
 
     # Put record to DynamoDB
-    dynamodb_put(text, timest, domain, s3path, before_size, after_size, compress_time, ocr_time)
+    dynamodb_put(text, timest, domain, s3path, before_size, after_size, compress_time, ocr_time, url)
