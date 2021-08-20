@@ -1,4 +1,6 @@
 aws-lambda-powertools
 awslambdaric
-codeguru_profiler_agent
 boto3
+codeguru_profiler_agent
+Pillow
+pytesseract

@@ -4,9 +4,9 @@ import { Bucket } from '@aws-cdk/aws-s3';
 import { CfnOutput, Construct, Duration, Stack, StackProps } from '@aws-cdk/core';
 import { ComputePlatform, ProfilingGroup } from '@aws-cdk/aws-codeguruprofiler';
 import { DockerImageCode, DockerImageFunction, Tracing } from '@aws-cdk/aws-lambda';
-import { Effect, ManagedPolicy, PolicyDocument, PolicyStatement, Role, ServicePrincipal } from '@aws-cdk/aws-iam';
 import { HttpApi, HttpMethod } from '@aws-cdk/aws-apigatewayv2';
 import { HttpProxyIntegration, LambdaProxyIntegration } from '@aws-cdk/aws-apigatewayv2-integrations';
+import { ManagedPolicy, Role, ServicePrincipal } from '@aws-cdk/aws-iam';
 import { Queue } from '@aws-cdk/aws-sqs';
 import { SqsEventSource } from '@aws-cdk/aws-lambda-event-sources';
 
@@ -37,7 +37,7 @@ export class CdkScreenshotStack extends Stack {
 
     // Create SQS queue
     const sqsQueue = new Queue(this, 'screenshotQueue', {
-      visibilityTimeout: Duration.seconds(30),
+      visibilityTimeout: Duration.seconds(60),
     });
 
     // Define Docker file for Lambda function
@@ -60,16 +60,15 @@ export class CdkScreenshotStack extends Stack {
       managedPolicies: [
         ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
         ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
-        ManagedPolicy.fromAwsManagedPolicyName('AmazonCodeGuruProfilerAgentAccess'),
-        ManagedPolicy.fromAwsManagedPolicyName('AmazonRekognitionReadOnlyAccess')
+        ManagedPolicy.fromAwsManagedPolicyName('AmazonCodeGuruProfilerAgentAccess')
       ]
     });
 
     // create Analyze Lambda function using Docker image
     const analyzeLambda = new DockerImageFunction(this, 'analyzeLambda', {
       code: DockerImageCode.fromImageAsset(analyzeDocker),
-      memorySize: 1024,
-      timeout: Duration.seconds(15),
+      memorySize: 2048,
+      timeout: Duration.seconds(60),
       tracing: Tracing.ACTIVE,
       reservedConcurrentExecutions: 3,
       retryAttempts: 0,

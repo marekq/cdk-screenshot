@@ -1,4 +1,4 @@
-import boto3, os, subprocess, time
+import boto3, os, pytesseract, subprocess
 from codeguru_profiler_agent import with_lambda_profiler
 from aws_lambda_powertools import Logger, Tracer
 
@@ -20,25 +20,6 @@ rekognition_client = boto3.client('rekognition')
 # Setup DynamoDB client
 dynamodb = boto3.resource('dynamodb')
 ddb_client = dynamodb.Table(os.environ['dynamodb_table'])
-
-# Rekognition image to text
-@tracer.capture_method(capture_response = False)
-def rekognition_image(fname):
-
-    response = rekognition_client.detect_text(
-        Image = {
-            'S3Object': {
-                'Bucket': bucketname,
-                'Name': fname
-            }
-        }
-    )
-
-    result = []
-    for text in response['TextDetections']:
-        result.append(text['DetectedText'])
-
-    return ' '.join(result)
 
 # Put record to DynamoDB
 @tracer.capture_method(capture_response = False)
@@ -95,6 +76,16 @@ def put_s3_file(bucketname, s3path, fname):
 
     print('uploaded ' + fname + ' to ' + bucketname + '/' + s3path)
 
+@tracer.capture_method(capture_response = False)
+def image_to_text(fname):
+
+    pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
+    text = pytesseract.image_to_string(fname, lang = 'eng')
+    print(text)
+
+    return text
+
+
 # Lambda handler
 @tracer.capture_lambda_handler(capture_response = False)
 @logger.inject_lambda_context(log_event = False)
@@ -109,11 +100,7 @@ def handler(event, context):
     timest = record.split('amazonaws.com/')[1].split('/', 3)[3].split('-', 1)[0]
     fname = '/tmp/screen.png'
 
-    print('s3bucket: ' + s3bucket)
-    print('s3path: ' + s3path)
-    print('domain: ' + domain)
-    print('timest: ' + timest)
-    print('fname: ' + fname)
+    print('s3bucket: ' + s3bucket + ' - s3path: ' + s3path + ' - domain: ' + domain + ' - timest: ' + timest +' - fname: ' + fname)
 
     # Get S3 file
     get_s3_file(s3bucket, s3path, fname)
@@ -124,12 +111,8 @@ def handler(event, context):
     # Upload S3 file
     put_s3_file(s3bucket, s3path, fname)
 
-    # Sleep for 1 second to allow S3 to catch up
-    #time.sleep(1)
-
-    # Get text from image using Rekognition
-    #rekognition = rekognition_image(fname)
-    #print(str(rekognition))
+    # Get text from image
+    text = image_to_text(fname)
 
     # Put record to DynamoDB
-    dynamodb_put('rekognition', timest, domain, s3path, beforesize, aftersize)
+    dynamodb_put(text, timest, domain, s3path, beforesize, aftersize)
