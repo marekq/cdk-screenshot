@@ -14,16 +14,13 @@ tracer = Tracer()
 bucketname = os.environ['s3bucket']
 s3_client = boto3.client('s3')
 
-# Setup Rekognition client
-rekognition_client = boto3.client('rekognition')
-
 # Setup DynamoDB client
 dynamodb = boto3.resource('dynamodb')
 ddb_client = dynamodb.Table(os.environ['dynamodb_table'])
 
 # Put record to DynamoDB
 @tracer.capture_method(capture_response = False)
-def dynamodb_put(rekognition_text, timest, domain, s3path, beforesize, aftersize):
+def dynamodb_put(rekognition_text, timest, domain, s3path, beforesize, aftersize, compress_time, ocr_time):
     
     ddb_client.put_item(
         Item = {
@@ -32,7 +29,9 @@ def dynamodb_put(rekognition_text, timest, domain, s3path, beforesize, aftersize
             'text': rekognition_text,
             's3path': s3path,
             'beforesize': beforesize,
-            'aftersize': aftersize
+            'aftersize': aftersize,
+            'ocrtime': ocr_time,
+            'compresstime': compress_time
         }
     )
 
@@ -41,16 +40,22 @@ def dynamodb_put(rekognition_text, timest, domain, s3path, beforesize, aftersize
 def compress_png(tmpfile):
 
     before_size = os.stat(tmpfile).st_size
+
+    startts = time.time()
     process = subprocess.Popen('pngquant ' + tmpfile + ' -o ' + tmpfile + ' -f --skip-if-larger -v --speed 1', stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell = True, cwd = '/tmp', text = True)
 
     stdout, stderr = process.communicate()
     #print(stdout)
     #print(stderr)
+
+    endts = time.time()
+    compress_time = round(endts - startts, 2)
+
     after_size = os.stat(tmpfile).st_size
 
     print('compressed png ' + tmpfile + ' from ' + str(before_size) + ' to ' + str(after_size))
 
-    return before_size, after_size
+    return before_size, after_size, compress_time
 
 # Compress png image using pngquant
 @tracer.capture_method(capture_response = False)
@@ -76,14 +81,19 @@ def put_s3_file(bucketname, s3path, fname):
 
     print('uploaded ' + fname + ' to ' + bucketname + '/' + s3path)
 
+# Convert image to text
 @tracer.capture_method(capture_response = False)
 def image_to_text(fname):
 
+    startts = time.time()
+
     pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
     text = pytesseract.image_to_string(fname, lang = 'eng')
-    print(text)
 
-    return text
+    endts = time.time()
+    ocr_time = round(endts - startts, 2)
+
+    return text, ocr_time
 
 
 # Lambda handler
@@ -106,13 +116,13 @@ def handler(event, context):
     get_s3_file(s3bucket, s3path, fname)
 
     # Compress png using pngquant
-    beforesize, aftersize = compress_png(fname)
+    beforesize, aftersize, compress_time = compress_png(fname)
 
     # Upload S3 file
     put_s3_file(s3bucket, s3path, fname)
 
     # Get text from image
-    text = image_to_text(fname)
+    text, ocr_time = image_to_text(fname)
 
     # Put record to DynamoDB
-    dynamodb_put(text, timest, domain, s3path, beforesize, aftersize)
+    dynamodb_put(text, timest, domain, s3path, beforesize, aftersize, compress_time, ocr_time)
