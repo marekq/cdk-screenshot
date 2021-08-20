@@ -49,7 +49,7 @@ def compress_png(tmpfile):
     #print(stderr)
 
     endts = time.time()
-    compress_time = round(endts - startts, 2)
+    compress_time = int((endts - startts) * 1000)
 
     after_size = os.stat(tmpfile).st_size
 
@@ -91,7 +91,7 @@ def image_to_text(fname):
     text = pytesseract.image_to_string(fname, lang = 'eng')
 
     endts = time.time()
-    ocr_time = round(endts - startts, 2)
+    ocr_time = int((endts - startts) * 1000)
 
     return text, ocr_time
 
