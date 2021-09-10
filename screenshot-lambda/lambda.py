@@ -1,4 +1,4 @@
-import boto3, os, socket, time
+import boto3, ipaddress, os, socket, time
 from codeguru_profiler_agent import with_lambda_profiler
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -6,10 +6,6 @@ from selenium.webdriver.common.keys import Keys
 from aws_lambda_powertools import Logger, Tracer
 
 # AWS Lambda Powertools
-modules_to_be_patched = [ "boto3" ]
-tracer = Tracer(patch_modules = modules_to_be_patched)
-
-# Setup logger and tracer
 logger = Logger()
 tracer = Tracer()
 
@@ -26,6 +22,22 @@ headers = {
     'Content-Type': 'text/html',
     "strict-transport-security": "max-age=31536000; includeSubDomains; preload"
 }
+
+# Check if IP address is allow listed for API Gateway
+def is_allow_listed(ip):
+
+    # Get allow list IP range
+    allow_list_range = os.environ['ip_allowlist']
+
+    if ipaddress.ip_address(ip) in ipaddress.ip_network(allow_list_range):
+
+        print("ALLOW - IP " + ip + " in " + allow_list_range)
+        return True
+
+    else:
+
+        print("BLOCK - IP " + ip + " not in " + allow_list_range)
+        return False
 
 # Upload screen shot to s3 using ONEZONE_IA storage class
 def upload_screenshot(tmpfile, bucketname, fname):
@@ -64,7 +76,7 @@ def generate_signed_url(bucketname, fname):
 
 # Lambda handler
 @tracer.capture_lambda_handler(capture_response = False)
-@logger.inject_lambda_context(log_event = False)
+@logger.inject_lambda_context(log_event = True)
 @with_lambda_profiler(profiling_group_name = os.environ['AWS_CODEGURU_PROFILER_GROUP_NAME'])
 def handler(event, context):
     
@@ -73,26 +85,45 @@ def handler(event, context):
 
     # Get url from API input
     if len(event['rawPath']) > 1:
+
         rawurl = event['rawPath'][1:]
         domain = rawurl.split('/')[0]
+        
+        src_ip = event['requestContext']['http']['sourceIp']
+        print(src_ip)
 
-        # Check if the dns domain is valid
-        try: 
+        # Check if IP address is allow listed
+        if is_allow_listed(src_ip):
 
-            x = socket.gethostbyname(domain)
-            print('ip ' + str(x) + ' for ' + rawurl)
-            response = ''
+            # Check if the dns domain is valid
+            try: 
 
-        # Return error if domain does not return dns record
-        except:
+                x = socket.gethostbyname(domain)
+                print('ip ' + str(x) + ' for ' + rawurl)
+                
+                response = ''
 
-            print('invalid dns ' + rawurl + ', setting github.com')
+            # Return error if domain does not return dns record
+            except:
+
+                print('invalid dns ' + rawurl + ', setting github.com')
+                
+                response = {
+                    "statusCode": 200,
+                    "body": '<html><body><center>invalid URL ' + rawurl + ' submitted</center></body></html>',
+                    "headers": headers
+                } 
+        
+        # Return error if IP address is not allow listed
+        else:
             
+            print('unauthorized IP ' + src_ip + ', returning error')
+
             response = {
                 "statusCode": 200,
-                "body": '<html><body><center>invalid URL ' + rawurl + ' submitted</center></body></html>',
+                "body": '<html><body><center>invalid IP ' + src_ip + ' submitted</center></body></html>',
                 "headers": headers
-            } 
+            }
 
     # If no URL is submitted, return error
     else:

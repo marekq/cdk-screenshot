@@ -1,7 +1,7 @@
 import path = require('path');
 import { AttributeType, BillingMode, Table } from '@aws-cdk/aws-dynamodb';
 import { Bucket } from '@aws-cdk/aws-s3';
-import { CfnOutput, Construct, Duration, RemovalPolicy, Stack, StackProps } from '@aws-cdk/core';
+import { CfnOutput, CfnParameter, Construct, Duration, RemovalPolicy, Stack, StackProps } from '@aws-cdk/core';
 import { ComputePlatform, ProfilingGroup } from '@aws-cdk/aws-codeguruprofiler';
 import { DockerImageCode, DockerImageFunction, Tracing } from '@aws-cdk/aws-lambda';
 import { HttpApi, HttpMethod } from '@aws-cdk/aws-apigatewayv2';
@@ -91,11 +91,18 @@ export class CdkScreenshotStack extends Stack {
       }
     });
 
+    // create IP allowlist for API Gateway (default 0.0.0.0/0, restrict it to any range you like)
+    const ipAllowlist = new CfnParameter(this, "ipAllowlist", {
+      type: "String",
+      description: "The IP allow list range for API gateway (default 0.0.0.0/0)",
+      default: "0.0.0.0/0"
+    });
+    
     // create Chrome Lambda function using Docker image
     const screenshotLambda = new DockerImageFunction(this, 'screenshotLambda', {
       code: DockerImageCode.fromImageAsset(screenshotDocker),
-      memorySize: 4096,
-      timeout: Duration.seconds(30),
+      memorySize: 10240,
+      timeout: Duration.seconds(20),
       tracing: Tracing.ACTIVE,
       reservedConcurrentExecutions: 3,
       retryAttempts: 0,
@@ -106,7 +113,8 @@ export class CdkScreenshotStack extends Stack {
       environment: {
         'sqsqueue': sqsQueue.queueUrl,
         's3bucket': s3bucket.bucketName,
-        'AWS_CODEGURU_PROFILER_GROUP_NAME': profileScreenshot.profilingGroupName
+        'AWS_CODEGURU_PROFILER_GROUP_NAME': profileScreenshot.profilingGroupName,
+        'ip_allowlist': ipAllowlist.valueAsString
       }
     });
 
@@ -153,6 +161,9 @@ export class CdkScreenshotStack extends Stack {
 
     // Print API Gateway URL
     new CfnOutput(this, 'API URL', { value: apigw.url ?? 'deployment error' });
+
+    // Print IP allowlist
+    new CfnOutput(this, 'IP Allowlist', { value: ipAllowlist.valueAsString ?? 'deployment error' });
 
   };
 };

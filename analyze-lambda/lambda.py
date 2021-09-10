@@ -3,10 +3,6 @@ from codeguru_profiler_agent import with_lambda_profiler
 from aws_lambda_powertools import Logger, Tracer
 
 # AWS Lambda Powertools
-modules_to_be_patched = [ "boto3" ]
-tracer = Tracer(patch_modules = modules_to_be_patched)
-
-# Setup logger and tracer
 logger = Logger()
 tracer = Tracer()
 
@@ -99,7 +95,7 @@ def image_to_text(fname):
 
 # Lambda handler
 @tracer.capture_lambda_handler(capture_response = False)
-@logger.inject_lambda_context(log_event = False)
+@logger.inject_lambda_context(log_event = True)
 @with_lambda_profiler(profiling_group_name = os.environ['AWS_CODEGURU_PROFILER_GROUP_NAME'])
 def handler(event, context):
     
