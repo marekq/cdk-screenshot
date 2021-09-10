@@ -121,7 +121,7 @@ def handler(event, context):
 
             response = {
                 "statusCode": 200,
-                "body": '<html><body><center>invalid IP ' + src_ip + ' submitted</center></body></html>',
+                "body": '<html><body><center>not allowed - IP ' + src_ip + '</center></body></html>',
                 "headers": headers
             }
 

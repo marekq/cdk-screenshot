@@ -101,7 +101,7 @@ export class CdkScreenshotStack extends Stack {
     // create Chrome Lambda function using Docker image
     const screenshotLambda = new DockerImageFunction(this, 'screenshotLambda', {
       code: DockerImageCode.fromImageAsset(screenshotDocker),
-      memorySize: 10240,
+      memorySize: 2048,
       timeout: Duration.seconds(20),
       tracing: Tracing.ACTIVE,
       reservedConcurrentExecutions: 3,
