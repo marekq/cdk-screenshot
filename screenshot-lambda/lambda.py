@@ -24,6 +24,7 @@ headers = {
 }
 
 # Check if IP address is allow listed for API Gateway
+@tracer.capture_method(capture_response = False)
 def is_allow_listed(ip):
 
     # Get allow list IP range
@@ -39,7 +40,8 @@ def is_allow_listed(ip):
         print("BLOCK - IP " + ip + " not in " + allow_list_range)
         return False
 
-# Upload screen shot to s3 using ONEZONE_IA storage class
+# Upload screen shot to S3 
+@tracer.capture_method(capture_response = False)
 def upload_screenshot(tmpfile, bucketname, fname):
     s3_client.upload_file(
         Filename = tmpfile, 
@@ -74,12 +76,60 @@ def generate_signed_url(bucketname, fname):
 
     return presigned_url
 
+# Capture screenshot
+@tracer.capture_method(capture_response = False)
+def get_screenshot(url, tmpfile):
+
+    # Add chromium driver
+    options = Options()
+    options.binary_location = '/usr/bin/chromium-browser'
+
+    # Add chromium options
+    options.add_argument('--start-maximized')
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--single-process')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--user-agent=Mozilla/5.0 (X11; NetBSD) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.116 Safari/537.36')
+
+    # Get URL using chromium
+    driver = webdriver.Chrome('/usr/bin/chromedriver', chrome_options = options)
+
+    # Get body of website
+    driver.get(url)
+
+    # Get screen dimensions
+    screenwidth = 1440
+    screenheight = driver.execute_script("return document.documentElement.scrollHeight")
+
+    if screenheight == 0:
+        screenheight = 1024
+
+    # Maximize screen
+    print('dimensions ' + ' ' + str(screenwidth) + ' ' + str(screenheight))
+    driver.set_window_size(screenwidth, screenheight)
+
+    # Select body and press escape to close some pop ups
+    body = driver.find_element_by_xpath('/html')
+    body.send_keys(Keys.ESCAPE)
+
+    # Save screenshot
+    body.screenshot(tmpfile)
+
+    # Close chromium
+    driver.close()
+    driver.quit()
+
+
 # Lambda handler
 @tracer.capture_lambda_handler(capture_response = False)
 @logger.inject_lambda_context(log_event = True)
 @with_lambda_profiler(profiling_group_name = os.environ['AWS_CODEGURU_PROFILER_GROUP_NAME'])
 def handler(event, context):
     
+    # Get start timestamp
+    startts = time.time()
+
     # Set empty html response
     response = ''
 
@@ -137,10 +187,7 @@ def handler(event, context):
     # If response is empty, run chromium browser to take screenshot
     if response == '':
 
-        # Get start timestamp
-        startts = time.time()
-
-        # Get url to resolve
+        # Get URL path
         url = 'https://' + rawurl
         print('getting ' + url)
 
@@ -148,46 +195,8 @@ def handler(event, context):
         fname = 'screenshots/' + domain + '/' + str(int(startts)) + '-' + rawurl.replace('.', '_').replace('/','-') + '.png'
         tmpfile = '/tmp/screen.png'
 
-        # Add chromium driver
-        options = Options()
-        options.binary_location = '/usr/bin/chromium-browser'
-    
-        # Add chromium options
-        options.add_argument('--start-maximized')
-        options.add_argument('--headless')
-        options.add_argument('--no-sandbox')
-        options.add_argument('--single-process')
-        options.add_argument('--disable-dev-shm-usage')
-        options.add_argument('--user-agent=Mozilla/5.0 (X11; NetBSD) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.116 Safari/537.36')
-
-        # Get url using chromium
-        driver = webdriver.Chrome('/usr/bin/chromedriver', chrome_options = options)
-
-        # Get body of website
-        driver.get(url)
-
-        # Get screen dimensions
-        #screenwidth = driver.execute_script("return document.documentElement.scrollWidth")
-        screenwidth = 1440
-        screenheight = driver.execute_script("return document.documentElement.scrollHeight")
-
-        if screenheight == 0:
-            screenheight = 1024
-
-        # Maximize screen
-        print('dimensions ' + ' ' + str(screenwidth) + ' ' + str(screenheight))
-        driver.set_window_size(screenwidth, screenheight)
-
-        # Select body and press escape to close some pop ups
-        body = driver.find_element_by_xpath('/html')
-        body.send_keys(Keys.ESCAPE)
-
-        # Save screenshot
-        body.screenshot(tmpfile)
-
-        # Close chromium
-        driver.close()
-        driver.quit()
+        # Get screenshot
+        get_screenshot(url, tmpfile)
 
         # Upload screenshot to S3
         upload_screenshot(tmpfile, bucketname, fname)
