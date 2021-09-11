@@ -43,6 +43,7 @@ def is_allow_listed(ip):
 # Upload screen shot to S3 
 @tracer.capture_method(capture_response = False)
 def upload_screenshot(tmpfile, bucketname, fname):
+
     s3_client.upload_file(
         Filename = tmpfile, 
         Bucket = bucketname, 
@@ -130,9 +131,6 @@ def handler(event, context):
     # Get start timestamp
     startts = time.time()
 
-    # Set empty html response
-    response = ''
-
     # Get url from API input
     if len(event['rawPath']) > 1:
 
@@ -151,14 +149,12 @@ def handler(event, context):
                 x = socket.gethostbyname(domain)
                 print('ip ' + str(x) + ' for ' + rawurl)
                 
-                response = ''
-
             # Return error if domain does not return dns record
             except:
 
                 print('invalid dns ' + rawurl + ', setting github.com')
                 
-                response = {
+                return {
                     "statusCode": 200,
                     "body": '<html><body><center>invalid URL ' + rawurl + ' submitted</center></body></html>',
                     "headers": headers
@@ -169,7 +165,7 @@ def handler(event, context):
             
             print('unauthorized IP ' + src_ip + ', returning error')
 
-            response = {
+            return {
                 "statusCode": 200,
                 "body": '<html><body><center>not allowed - IP ' + src_ip + '</center></body></html>',
                 "headers": headers
@@ -178,45 +174,51 @@ def handler(event, context):
     # If no URL is submitted, return error
     else:
 
-        response = {
+        return {
             "statusCode": 200,
             "body": '<html><body><center>no URL submitted</center></body></html>',
             "headers": headers
         } 
 
-    # If response is empty, run chromium browser to take screenshot
-    if response == '':
 
-        # Get URL path
-        url = 'https://' + rawurl
-        print('getting ' + url)
+    # Get URL path
+    url = 'https://' + rawurl
+    print('getting ' + url)
 
-        # Set tmp and file paths
-        fname = 'screenshots/' + domain + '/' + str(int(startts)) + '-' + rawurl.replace('.', '_').replace('/','-') + '.png'
-        tmpfile = '/tmp/screen.png'
+    # Set tmp and file paths
+    fname = 'screenshots/' + domain + '/' + str(int(startts)) + '-' + rawurl.replace('.', '_').replace('/','-') + '.png'
+    tmpfile = '/tmp/screen.png'
 
-        # Get screenshot
+    # Get screenshot
+    try:
         get_screenshot(url, tmpfile)
 
-        # Upload screenshot to S3
-        upload_screenshot(tmpfile, bucketname, fname)
+    except Exception as e:
+        print('error with get screenshot ' + str(e))
 
-        # Send SQS message with screenshot url
-        sqs_send(sqs_queue_url, bucketname, fname)
-
-        # Generate S3 pre-signed URL
-        presigned_url = generate_signed_url(bucketname, fname)
-
-        # Get end timestamp
-        endts = time.time()
-        timediff = endts - startts
-
-        # Return HTML response
-        response = {
+        return {
             "statusCode": 200,
-            "body": '<html><body><center>' + url + ' - took ' + str(round(timediff, 2)) + ' seconds <br /><img src = ' + presigned_url + '></center></body></html>',
+            "body": '<html><body><center>error getting - ' + url + '<br /></center></body></html>',
             "headers": headers
         } 
-        
-    # Return HTML response    
-    return response
+
+    # Upload screenshot to S3
+    upload_screenshot(tmpfile, bucketname, fname)
+
+    # Send SQS message with screenshot url
+    sqs_send(sqs_queue_url, bucketname, fname)
+
+    # Generate S3 pre-signed URL
+    presigned_url = generate_signed_url(bucketname, fname)
+
+    # Get end timestamp
+    endts = time.time()
+    timediff = endts - startts
+
+    # Return HTML response
+    return {
+        "statusCode": 200,
+        "body": '<html><body><center>' + url + ' - took ' + str(round(timediff, 2)) + ' seconds <br /><img src = ' + presigned_url + '></center></body></html>',
+        "headers": headers
+    } 
+    

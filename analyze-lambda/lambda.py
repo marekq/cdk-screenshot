@@ -56,14 +56,17 @@ def compress_png(tmpfile):
 
 # Compress png image using pngquant
 @tracer.capture_method(capture_response = False)
-def get_s3_file(bucketname, s3path, tmppath):
+def get_s3_file(bucketname, s3path, fname):
     
-    s3_client.download_file(bucketname, s3path, tmppath)
-    print('downloaded ' + bucketname + '/' + s3path + ' to ' + tmppath)
+    print('downloading bucket: ' + bucketname + ', s3path: ' + s3path + ' , tmppath: ' + fname)
+
+    s3_client.download_file(bucketname, s3path, fname)
 
 # Upload screen shot to s3 using ONEZONE_IA storage class
 @tracer.capture_method(capture_response = False)
 def put_s3_file(bucketname, s3path, fname):
+
+    print('uploading bucket: ' + bucketname + ', s3path: ' + s3path + ' , tmppath: ' + fname)
 
     s3_client.upload_file(
         Filename = fname, 
@@ -76,21 +79,31 @@ def put_s3_file(bucketname, s3path, fname):
         }
     )
 
-    print('uploaded ' + fname + ' to ' + bucketname + '/' + s3path)
 
 # Convert image to text
 @tracer.capture_method(capture_response = False)
 def image_to_text(fname):
 
     startts = time.time()
+    text = ''
+    ocr_time = 0
 
-    pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
-    text = pytesseract.image_to_string(fname, lang = 'eng')
+    try:
+        pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
+        text = pytesseract.image_to_string(fname, lang = 'eng', timeout = 20)
+    
+        endts = time.time()
+        ocr_time = int((endts - startts) * 1000)
+        print('done OCR in ' + str(ocr_time) + ' ms with text output: ' + str(text))
 
-    endts = time.time()
-    ocr_time = int((endts - startts) * 1000)
-    print('completed OCR in ' + str(ocr_time) + ' ms')
+    except Exception as e:
 
+        text = ''
+
+        endts = time.time()
+        ocr_time = int((endts - startts) * 1000)
+        print('failed OCR in ' + str(ocr_time) + ' ms - ' + str(e))
+    
     return text, ocr_time
 
 # Lambda handler
@@ -109,8 +122,10 @@ def handler(event, context):
     url = 'https://' + domain + '/' + s3path.split('/', 1)[1]
 
     # Get timestamp
-    timest = record.split('amazonaws.com/')[1].split('/', 3)[3].split('-', 1)[0]
+    timest = record.split('amazonaws.com/')[1].split('/')[-1:][0][:10]
     fname = '/tmp/screen.png'
+
+    print(' s3bucket ' + s3bucket + '\n s3path ' + s3path + '\n domain ' + domain + '\n url ' + url + '\n timest ' + str(timest))
 
     # Get S3 file
     get_s3_file(s3bucket, s3path, fname)

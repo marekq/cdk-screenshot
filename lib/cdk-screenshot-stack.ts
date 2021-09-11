@@ -38,7 +38,7 @@ export class CdkScreenshotStack extends Stack {
       computePlatform: ComputePlatform.AWS_LAMBDA
     });
 
-    // Create the analuze profiling group
+    // Create the analyze profiling group
     const profileAnalyze = new ProfilingGroup(this, 'profileAnalyze', {
       computePlatform: ComputePlatform.AWS_LAMBDA
     });
@@ -46,6 +46,7 @@ export class CdkScreenshotStack extends Stack {
     // Create SQS queue
     const sqsQueue = new Queue(this, 'screenshotQueue', {
       visibilityTimeout: Duration.seconds(60),
+      retentionPeriod: Duration.minutes(5)
     });
 
     // Define Docker file for Lambda function
@@ -92,16 +93,12 @@ export class CdkScreenshotStack extends Stack {
     });
 
     // create IP allowlist for API Gateway (default 0.0.0.0/0, restrict it to any range you like)
-    const ipAllowlist = new CfnParameter(this, "ipAllowlist", {
-      type: "String",
-      description: "The IP allow list range for API gateway (default 0.0.0.0/0)",
-      default: "0.0.0.0/0"
-    });
+    const allow_list = this.node.tryGetContext("ENVIRONMENTS")['prod']['allow_list']
     
     // create Chrome Lambda function using Docker image
     const screenshotLambda = new DockerImageFunction(this, 'screenshotLambda', {
       code: DockerImageCode.fromImageAsset(screenshotDocker),
-      memorySize: 2048,
+      memorySize: 4096,
       timeout: Duration.seconds(20),
       tracing: Tracing.ACTIVE,
       reservedConcurrentExecutions: 3,
@@ -114,7 +111,7 @@ export class CdkScreenshotStack extends Stack {
         'sqsqueue': sqsQueue.queueUrl,
         's3bucket': s3bucket.bucketName,
         'AWS_CODEGURU_PROFILER_GROUP_NAME': profileScreenshot.profilingGroupName,
-        'ip_allowlist': ipAllowlist.valueAsString
+        'ip_allowlist': allow_list
       }
     });
 
@@ -163,7 +160,7 @@ export class CdkScreenshotStack extends Stack {
     new CfnOutput(this, 'API URL', { value: apigw.url ?? 'deployment error' });
 
     // Print IP allowlist
-    new CfnOutput(this, 'IP Allowlist', { value: ipAllowlist.valueAsString ?? 'deployment error' });
+    new CfnOutput(this, 'IP Allowlist', { value: allow_list ?? 'deployment error' });
 
   };
 };
