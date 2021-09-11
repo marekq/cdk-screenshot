@@ -58,7 +58,7 @@ def compress_png(tmpfile):
 @tracer.capture_method(capture_response = False)
 def get_s3_file(bucketname, s3path, fname):
     
-    print('downloading bucket: ' + bucketname + ', s3path: ' + s3path + ' , tmppath: ' + fname)
+    print('downloading bucket: ' + bucketname + ' , s3path: ' + s3path + ' , tmppath: ' + fname)
 
     s3_client.download_file(bucketname, s3path, fname)
 
@@ -66,7 +66,7 @@ def get_s3_file(bucketname, s3path, fname):
 @tracer.capture_method(capture_response = False)
 def put_s3_file(bucketname, s3path, fname):
 
-    print('uploading bucket: ' + bucketname + ', s3path: ' + s3path + ' , tmppath: ' + fname)
+    print('uploading bucket: ' + bucketname + ' , s3path: ' + s3path + ' , tmppath: ' + fname)
 
     s3_client.upload_file(
         Filename = fname, 
@@ -94,7 +94,7 @@ def image_to_text(fname):
     
         endts = time.time()
         ocr_time = int((endts - startts) * 1000)
-        print('done OCR in ' + str(ocr_time) + ' ms with text output: ' + str(text))
+        print('done OCR in ' + str(ocr_time) + ' ms with ' + str(len(text)) + ' chars output')
 
     except Exception as e:
 
